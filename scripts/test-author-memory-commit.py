@@ -1119,14 +1119,14 @@ def main() -> None:
 
     # 只锚 prompt 与运行时 CLI / 槽位的对接片段，不钉措辞
     injection_contracts = {
-        REPO / "skills/story-long-write/references/workflow-chapter.md": (
+        # 写一章的填槽说明随「只在交给写手时才用」迁到 agent-calls.md（v0.8.2）。
+        REPO / "skills/story-long-write/references/agent-calls.md": (
             "`author_preferences`",
         ),
         # 查到的偏好要进子代理 prompt 的槽位，否则 query 照跑、结果到不了写手。
-        REPO / "skills/story-short-write/references/workflow-draft.md": (
+        # 短篇派写手的 prompt 同样随「只在交给写手时才用」迁到 agent-calls.md（v0.8.2）。
+        REPO / "skills/story-short-write/references/agent-calls.md": (
             "作者偏好 query",
-        ),
-        REPO / "skills/story-short-write/references/workflow-revision.md": (
             "\\n作者偏好：{",
         ),
         REPO / "skills/story-deslop/SKILL.md": (
@@ -1145,9 +1145,23 @@ def main() -> None:
         for fragment in required_fragments:
             assert fragment in content, f"missing author-memory injection contract in {path}: {fragment}"
     # #436：文档不再引导推断写入
-    for path in sorted((REPO / "skills").glob("*/references/author-memory.md")) + [REPO / "skills/story/SKILL.md", REPO / "skills/story-review/SKILL.md", REPO / "skills/story-deslop/SKILL.md"]:
+    for path in sorted((REPO / "skills").glob("*/references/author-memory*.md")) + [REPO / "skills/story/SKILL.md", REPO / "skills/story-review/SKILL.md", REPO / "skills/story-deslop/SKILL.md"]:
         content = path.read_text(encoding="utf-8")
         assert "repeated_correction" not in content and "inferred_pattern" not in content, f"{path} 仍在引导推断写入"
+    # v0.8.2：协议按作者时刻拆分——记一条偏好的时刻只读 author-memory.md，少见时刻的规则在维护文件。
+    # 只锚小节与指路，防止规则被悄悄删掉或挪回常读文件。
+    moment_anchors = {
+        "author-memory.md": ("author-memory-maintenance.md", "## 回执怎么告诉作者", "## 记不记、记成什么", "record --workspace", "query  --workspace"),
+        "author-memory-maintenance.md": ("## 整理作者记忆", "## 任务映射表", "## 单书布局", "## 存量迁移", "## 冲突候选", "12288", "migrate --workspace", "commit  --workspace", "check   --workspace"),
+    }
+    for name, fragments in moment_anchors.items():
+        for path in sorted((REPO / "skills").glob(f"*/references/{name}")):
+            content = path.read_text(encoding="utf-8")
+            for fragment in fragments:
+                assert fragment in content, f"{path} 缺少作者记忆时刻锚点：{fragment}"
+    hot = (REPO / "skills/story/references/author-memory.md").read_text(encoding="utf-8")
+    for rare in ("## 整理作者记忆", "12288", "migrate --workspace", "commit  --workspace"):
+        assert rare not in hot, f"少见时刻规则回流到 author-memory.md：{rare}"
 
     print("OK: author-memory transaction behavior")
 

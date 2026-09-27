@@ -26,7 +26,7 @@ const longLines = long.split(/\r?\n/)
 const longGateLine = longLines.findIndex((line) => line.includes('## 写前必读')) + 1
 assert(longGateLine > 0 && longGateLine <= 20, `long 写前必读 gate must stay in first screen, got line ${longGateLine}`)
 for (const reference of [
-  'workflow-setup.md', 'workflow-chapter.md', 'workflow-daily.md', 'workflow-revision.md', 'long-format.md',
+  'workflow-setup.md', 'workflow-volume.md', 'workflow-outline.md', 'workflow-chapter.md', 'workflow-daily.md', 'workflow-revision.md', 'long-format.md',
   'writing-craft.md', 'long-chapter-quality.md', 'long-chapter-hooks.md', 'long-suspense.md',
   'long-reversal.md',
 ]) {
@@ -75,5 +75,20 @@ assert.match(shortDraft, /去掉 `--check-contract` 重跑/, 'workflow-draft mus
 const shortRevision = fs.readFileSync(path.join(repoRoot, 'skills/story-short-write/references/workflow-revision.md'), 'utf8')
 const finalCheck = shortRevision.match(/`node scripts\/check-delivery-contract\.js ([^`]*)`/)
 assert(finalCheck && !finalCheck[1].includes('--check-contract'), 'workflow-revision must keep the final delivery check')
+
+// v0.8.2 短篇按作者时刻加载：写正文只靠落盘的设计文件接上构思，不再路由构思时读的方法论
+// （以前写正文要回查反派/钩子/公式/导语/对标召回，换了对话就得整份重读）。
+assert.match(short, /\*\*交接只靠落盘\*\*/, 'short SKILL.md must state the design-to-draft handoff')
+for (const reference of [
+  'workflow-design.md', 'writing-workflow.md', 'short-reversal.md', 'submission-craft.md', 'villain-and-reveal.md',
+  'genre-writing-formulas.md', 'hooks-chapter.md', 'hooks-paragraph.md', 'benchmark-recall.md', 'cross-book-recall.md',
+]) {
+  assert(!shortDraft.includes(reference), `workflow-draft must take ${reference} decisions from 设定.md, not re-read it`)
+}
+for (const field of ['平台基调', '作者已定']) {
+  assert(shortDesign.includes(field), `workflow-design must land ${field} in 设定.md for the draft moment`)
+}
+// 「像」只有一个口径：入口完成门槛的逐处复核功能，不设全文硬上限。
+assert.doesNotMatch(shortRevision, /全文不超 10 处/, 'workflow-revision must not reintroduce a hard 像 cap')
 
 process.stdout.write('reference-gates: source policy holds\n')

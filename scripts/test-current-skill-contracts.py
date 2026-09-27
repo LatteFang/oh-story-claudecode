@@ -288,7 +288,7 @@ def test_progress_schema_pins_are_repo_wide() -> None:
     for relative in (
         "skills/story-long-analyze/references/pipeline-ops.md",
         "skills/story-long-analyze/SKILL.md",
-        "skills/story-import/SKILL.md",
+        "skills/story-import/references/deep-analysis.md",
         "skills/story-setup/UPGRADING.md",
         "demo/拆文库/盘龙/_progress.md",
     ):
@@ -592,6 +592,46 @@ def test_spawn_preflight_uses_agents_version_not_file_existence() -> None:
     )
 
 
+def test_author_note_preflight_keeps_engine_words_in_tech_note() -> None:
+    bare = "能力缺失时报告 `Fallback: project custom agents unavailable -> solo`。技术备注：…\n"
+    require(
+        "author-note-preflight" in finding_codes(
+            VALIDATOR.author_note_preflight_findings(bare, Path("bare-fixture.md"))
+        ),
+        "a bare Fallback report to the author must be flagged",
+    )
+    no_note = "同时用一句白话提示作者，`Notice: agents bundle 版本不匹配` 原文另行记录。\n"
+    require(
+        "author-note-preflight" in finding_codes(
+            VALIDATOR.author_note_preflight_findings(no_note, Path("no-note-fixture.md"))
+        ),
+        "a Skill without a 技术备注 route must be flagged",
+    )
+    # 换个动词、换个冒号就能绕开「报告 `Fallback:`」固定句式；只要同一句没写进技术备注都要拦。
+    for evasion in (
+        "降级时报 `Fallback: project custom agents unavailable -> solo`。汇报末行写技术备注：…\n",
+        "报告：`Notice: agents bundle 版本不匹配`。技术备注：…\n",
+        "直接说出 `Fallback: spawn failed -> solo`；其余见技术备注行。\n",
+    ):
+        require(
+            "author-note-preflight" in finding_codes(
+                VALIDATOR.author_note_preflight_findings(evasion, Path("evasion-fixture.md"))
+            ),
+            "a Fallback/Notice sentence without 技术备注 must be flagged: {}".format(evasion.strip()),
+        )
+    routed = "降级时一句白话告诉作者，`Fallback: x -> solo` 原文只写进汇报最后一行「技术备注：」。\n"
+    require(
+        not VALIDATOR.author_note_preflight_findings(routed, Path("routed-fixture.md")),
+        "a Fallback routed into 技术备注 in the same sentence must pass",
+    )
+    for relative in VALIDATOR.AUTHOR_NOTE_PREFLIGHT_SKILLS:
+        path = REPO_ROOT / relative
+        require(
+            not VALIDATOR.author_note_preflight_findings(path.read_text(encoding="utf-8"), path),
+            "{} must route Fallback/Notice into the 技术备注 line".format(relative),
+        )
+
+
 def test_reviewed_benchmark_wording_stays_removed() -> None:
     cases = {
         "benchmark-primary-nonblocking-wording": "缺失按原流程，不阻塞。\n",
@@ -766,7 +806,7 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
     """
 
     rules = {rule.code: rule for rule in VALIDATOR.LEGACY_RULES}
-    explorer = "skills/story-setup/references/templates/agents/story-explorer.md"
+    explorer = "skills/story-setup/references/agent-references/benchmark-style-load.md"
     cases = {
         "style-profile-as-book-existence-probe": (
             explorer,
@@ -777,7 +817,7 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
             "**不得用 `文风.md` 兼作目录存在性探针**\n",
         ),
         "forbidden-outline-numeric-capacity": (
-            "skills/story-long-write/references/workflow-setup.md",
+            "skills/story-long-write/references/workflow-outline.md",
             "末尾写一行 `目标字数合计：下限X字（章目标Y，范围Y-Z）`。\n",
             "情节点只写语义义务，不填写逐点字数。\n",
         ),
@@ -820,7 +860,7 @@ def test_style_profile_is_not_a_book_existence_probe() -> None:
     budget_rule = rules["forbidden-outline-numeric-capacity"]
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        path = root / "skills/story-long-write/references/workflow-setup.md"
+        path = root / "skills/story-long-write/references/workflow-outline.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("不得再写旧字段 `预算合计` 或 `目标字数合计`。\n", encoding="utf-8")
         require(
@@ -887,6 +927,44 @@ def test_author_facing_templates_stay_plain() -> None:
     )
 
 
+def test_analyze_moments_route_and_default_dispatch() -> None:
+    """拆文按时刻读：入口路由表缺一份阶段文件就报；停下来问时不把派发方式丢给作者选。"""
+
+    require(not VALIDATOR.analyze_moment_routing_findings(REPO_ROOT), "real analyze skills must route every moment file")
+    real_facing = REPO_ROOT / "skills/story-long-analyze/references/author-facing.md"
+    require(not VALIDATOR.analyze_dispatch_default_findings(real_facing), "real stop-after-opening template must default dispatch")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for relative, heading, files in VALIDATOR.ANALYZE_MOMENT_ROUTES:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            rows = "".join("| x | [{0}](references/{0}) |\n".format(name) for name in files[1:])
+            path.write_text("{}\n\n{}\n## 下一节\n\n[{}](references/{})\n".format(heading, rows, files[0], files[0]), encoding="utf-8")
+        flagged = {finding.message for finding in VALIDATOR.analyze_moment_routing_findings(root)}
+        for _, _, files in VALIDATOR.ANALYZE_MOMENT_ROUTES:
+            require(
+                any(files[0] in message for message in flagged),
+                "a moment file linked only outside the routing table must be flagged: {}".format(files[0]),
+            )
+        facing = root / "author-facing.md"
+        facing.write_text(
+            "### 开头三章拆完、停下来问\n\n```text\n继续的话，想怎么拆？\n1. 一段接一段\n```\n\n### 拆的过程中报进度\n",
+            encoding="utf-8",
+        )
+        require(
+            finding_codes(VALIDATOR.analyze_dispatch_default_findings(facing)) == {"analyze-dispatch-default"},
+            "asking the author to pick a dispatch mode must be flagged",
+        )
+        facing.write_text(
+            "### 开头三章拆完、停下来问\n\n```text\n继续的话我每次同时拆三段。\n```\n\n### 作者问起怎么拆\n\n```text\n1. 一段接一段\n```\n",
+            encoding="utf-8",
+        )
+        require(
+            not VALIDATOR.analyze_dispatch_default_findings(facing),
+            "explaining the options only when the author asks must stay allowed",
+        )
+
+
 def main() -> int:
     test_manifest_contract()
     test_bad_fallbacks_fail()
@@ -899,6 +977,7 @@ def main() -> int:
     test_old_artifact_prose_silent_only()
     test_story_import_keeps_self_out_of_benchmarks()
     test_spawn_preflight_uses_agents_version_not_file_existence()
+    test_author_note_preflight_keeps_engine_words_in_tech_note()
     test_reviewed_benchmark_wording_stays_removed()
     test_p1_deletion_guards()
     test_analyze_portability_guards()
@@ -909,6 +988,7 @@ def main() -> int:
     test_style_profile_is_not_a_book_existence_probe()
     test_outline_total_and_profile_gap_parity()
     test_author_facing_templates_stay_plain()
+    test_analyze_moments_route_and_default_dispatch()
     print("OK: current-contract manifest, structure, and fallback regressions passed")
     return 0
 

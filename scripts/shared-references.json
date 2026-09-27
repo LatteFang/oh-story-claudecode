@@ -21,6 +21,16 @@
       ]
     },
     {
+      "name": "author-memory-maintenance-reference",
+      "source": "skills/story/references/author-memory-maintenance.md",
+      "targets": [
+        "skills/story-long-write/references/author-memory-maintenance.md",
+        "skills/story-short-write/references/author-memory-maintenance.md",
+        "skills/story-deslop/references/author-memory-maintenance.md",
+        "skills/story-review/references/author-memory-maintenance.md"
+      ]
+    },
+    {
       "name": "prose-banned-words",
       "source": "skills/story-long-write/references/banned-words.md",
       "targets": [
@@ -56,6 +66,11 @@
         "skills/story-review/references/dialogue-mastery.md",
         "skills/story-setup/references/agent-references/dialogue-mastery.md"
       ]
+    },
+    {
+      "name": "emotion-on-page",
+      "source": "skills/story-long-write/references/emotion-on-page.md",
+      "targets": ["skills/story-setup/references/agent-references/emotion-on-page.md"]
     },
     {
       "name": "emotional-arc-design",
@@ -161,6 +176,11 @@
       "targets": ["skills/story-setup/references/agent-references/long-genre-catalog.md"]
     },
     {
+      "name": "writing-craft",
+      "source": "skills/story-long-write/references/writing-craft.md",
+      "targets": ["skills/story-setup/references/agent-references/writing-craft.md"]
+    },
+    {
       "name": "long-genre-mechanics",
       "source": "skills/story-long-write/references/long-genre-mechanics.md",
       "targets": ["skills/story-setup/references/agent-references/long-genre-mechanics.md"]
@@ -197,7 +217,8 @@
       "name": "deslop-gate-rules",
       "source": "skills/story-deslop/references/deslop-gates.md",
       "targets": [
-        "skills/story-setup/references/agent-references/deslop-gates.md"
+        "skills/story-setup/references/agent-references/deslop-gates.md",
+        "skills/story-long-write/references/deslop-gates.md"
       ]
     },
     {
@@ -272,14 +293,6 @@
       "members": [
         "skills/story-long-write/references/emotional-methods.md",
         "skills/story-setup/references/agent-references/long-emotional-methods.md"
-      ]
-    },
-    {
-      "name": "writing-craft-deployment",
-      "reason": "Setup changes only routing lines so its self-contained bundle can reference long and short profile assets.",
-      "members": [
-        "skills/story-long-write/references/writing-craft.md",
-        "skills/story-setup/references/agent-references/writing-craft.md"
       ]
     },
     {

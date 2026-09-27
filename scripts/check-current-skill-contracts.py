@@ -124,7 +124,8 @@ LEGACY_RULES = (
         "duplicate-adapter-reference-fallback",
         "story-setup deploys one canonical reference path per adapter",
         r"同步复制到\s*`skills/[^`]+`\s*作为 fallback",
-        ("skills/story-setup/SKILL.md",),
+        # 入口只留通用流程，各宿主的复制步骤在 references/deploy-*.md，两处都要扫。
+        ("skills/story-setup/SKILL.md", "skills/story-setup/references"),
     ),
     AbsentRule(
         "opencode-old-reference-prefix",
@@ -229,6 +230,7 @@ LEGACY_RULES = (
         r"(?:优先探|回退探)[^\n]{0,60}\{书名\}/文风\.md|"
         r"Glob\s*`?(?:对标|拆文库)/\*/文风\.md",
         (
+            "skills/story-setup/references/agent-references/benchmark-style-load.md",
             "skills/story-setup/references/templates/agents/story-explorer.md",
             "skills/story-setup/references/opencode/agents/story-explorer.md",
             "skills/story-setup/references/codex/agents/story-explorer.toml",
@@ -240,7 +242,8 @@ LEGACY_RULES = (
         "outline beats never use numeric totals or sigma bands to predict prose capacity",
         r"预算合计|目标字数合计|Σ∈\[章目标",
         (
-            "skills/story-long-write/references/workflow-setup.md",
+            "skills/story-long-write/references/workflow-volume.md",
+            "skills/story-long-write/references/workflow-outline.md",
             "skills/story-long-write/references/artifact-protocols.md",
             "skills/story-setup/references/templates/rules/story-outline.md",
             "skills/story-setup/references/templates/agents/story-architect.md",
@@ -265,8 +268,7 @@ SPAWN_CAPABLE_SKILLS = (
 
 # 细纲结构容量的 canonical 副本与消费方：逐点只写语义义务，不填数字配额。
 OUTLINE_SEMANTIC_CAPACITY_CONSUMERS = (
-    "skills/story-long-write/references/workflow-setup.md",
-    "skills/story-long-write/references/artifact-protocols.md",
+    "skills/story-long-write/references/workflow-outline.md",
     "skills/story-setup/references/templates/rules/story-outline.md",
 )
 
@@ -707,6 +709,67 @@ AUTHOR_FACING_FORBIDDEN = (
 FENCE_RE = re.compile(r"^(`{3,})[^\n]*\n(.*?)^\1\s*$", re.MULTILINE | re.DOTALL)
 
 
+# 拆文按时刻加载：入口的「按时刻读」表是每个时刻读哪几份文件的唯一路由。某个阶段文件从表里
+# 掉出去，那个时刻就只能靠模型猜着整读旧的大文件，35K 的时刻上限随之失效。
+ANALYZE_MOMENT_ROUTES = (
+    (
+        "skills/story-long-analyze/SKILL.md",
+        "## 按时刻读",
+        (
+            "stage1-golden-chapters.md", "index-rebuild.md", "pipeline-ops.md", "stage2-extraction.md",
+            "synthesis-inputs.md", "stage3-plot-rhythm.md", "stage4-characters-settings.md",
+            "stage5-report.md", "style-profile-generator.md", "final-checks.md",
+        ),
+    ),
+    (
+        "skills/story-short-analyze/SKILL.md",
+        "### 按时刻读",
+        (
+            "output-contract.md", "analysis-method.md", "stage2-3-structure-emotion.md",
+            "stage4-6-reversal-summary.md", "quality-checklist.md", "analysis-report-style.md",
+        ),
+    ),
+)
+
+
+def analyze_moment_routing_findings(repo_root: Path) -> List[Finding]:
+    findings: List[Finding] = []
+    for relative, heading, files in ANALYZE_MOMENT_ROUTES:
+        path = repo_root / relative
+        text = read_text(path)
+        if text is None or heading not in text:
+            findings.append(Finding("analyze-moment-routing", "missing moment routing table {!r}".format(heading), path))
+            continue
+        level = heading.split(" ", 1)[0]
+        section = text.split(heading, 1)[1]
+        section = re.split(r"^#{{1,{}}} ".format(len(level)), section, maxsplit=1, flags=re.MULTILINE)[0]
+        for name in files:
+            if "(references/{})".format(name) not in section:
+                findings.append(Finding(
+                    "analyze-moment-routing",
+                    "moment routing table must link references/{}".format(name),
+                    path,
+                ))
+    return findings
+
+
+def analyze_dispatch_default_findings(path: Path) -> List[Finding]:
+    """开头三章拆完停下来问时，派发方式替作者定好，不把工程选择丢给作者。"""
+    text = read_text(path)
+    if text is None:
+        return [Finding("analyze-dispatch-default", "cannot read author-facing templates", path)]
+    match = re.search(r"^### 开头三章拆完、停下来问\n(.*?)(?=^### )", text, re.MULTILINE | re.DOTALL)
+    if match is None:
+        return [Finding("analyze-dispatch-default", "missing the stop-after-opening template", path)]
+    if re.search(r"想怎么拆|^\d+\.\s", match.group(1), re.MULTILINE):
+        return [Finding(
+            "analyze-dispatch-default",
+            "stop-after-opening must default the dispatch mode instead of asking the author to pick one",
+            path,
+        )]
+    return []
+
+
 def author_facing_findings(path: Path) -> List[Finding]:
     """Every fenced block in the author-facing reference is text the author reads verbatim."""
     text = read_text(path)
@@ -772,6 +835,44 @@ def spawn_preflight_findings(
             path,
         )
     ]
+
+
+# 作者可见文本只说白话：这些 Skill 的降级与版本提示原文只进汇报最后一行「技术备注：」，
+# 不再写成「报告 `Fallback: …`」「同时报告 `Notice: …`」让模型原样念给作者（v0.8.2）。
+AUTHOR_NOTE_PREFLIGHT_SKILLS = (
+    "skills/story-long-write/SKILL.md",
+    "skills/story-short-write/SKILL.md",
+    "skills/story-deslop/SKILL.md",
+    "skills/story-review/SKILL.md",
+)
+BARE_ENGINE_REPORT_RE = re.compile(r"报告\s*`(?:Fallback|Notice):")
+ENGINE_LINE_RE = re.compile(r"(?:Fallback|Notice):")
+SENTENCE_SPLIT_RE = re.compile(r"[。；！？\n]")
+
+
+def author_note_preflight_findings(text: str, path: Path) -> List[Finding]:
+    """Fallback / Notice 原文必须改走技术备注行，给作者的是一句白话。
+
+    只认「同一句话里写明进技术备注」：换个动词（报、说出、报告：）绕开固定句式都拦得住。"""
+
+    problems = []
+    if BARE_ENGINE_REPORT_RE.search(text):
+        problems.append("Fallback/Notice must not be reported to the author verbatim")
+    stray = [
+        sentence.strip()
+        for sentence in SENTENCE_SPLIT_RE.split(text)
+        if ENGINE_LINE_RE.search(sentence) and "技术备注" not in sentence
+    ]
+    if stray:
+        problems.append(
+            "every Fallback:/Notice: mention must say in the same sentence that it goes into the 技术备注 line: "
+            + " | ".join(item[:60] for item in stray)
+        )
+    if "技术备注" not in text:
+        problems.append("route Fallback/Notice into the trailing 技术备注 line")
+    if not problems:
+        return []
+    return [Finding("author-note-preflight", "; ".join(problems), path)]
 
 
 def rubric_dimension_names(repo_root: Path) -> Tuple[List[str], List[str]]:
@@ -1193,6 +1294,10 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             )
         )
 
+    for relative in AUTHOR_NOTE_PREFLIGHT_SKILLS:
+        note_skill = repo_root / relative
+        findings.extend(author_note_preflight_findings(read_text(note_skill) or "", note_skill))
+
     upgrading = repo_root / "skills/story-setup/UPGRADING.md"
     upgrading_text = read_text(upgrading) or ""
     findings.extend(upgrading_version_findings(upgrading_text, manifest, upgrading))
@@ -1250,6 +1355,8 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     findings.extend(rubric_parity_findings(repo_root))
 
     findings.extend(author_facing_findings(repo_root / "skills/story-long-analyze/references/author-facing.md"))
+    findings.extend(analyze_dispatch_default_findings(repo_root / "skills/story-long-analyze/references/author-facing.md"))
+    findings.extend(analyze_moment_routing_findings(repo_root))
     long_analyze = repo_root / "skills/story-long-analyze/SKILL.md"
     findings.extend(require_pattern(long_analyze, r"references/author-facing\.md", "author-facing-routed",
                                     "story-long-analyze must route every author-visible message through author-facing.md"))
@@ -1257,11 +1364,13 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     # 目录块剔除由 build_chapter_index.py 执行，test-long-analyze-runtime-refactor.py 用带目录原文覆盖；
     # 章号连续性校验目前没有运行时回归，暂留 Stage 0 的文字锚点。
     findings.extend(require_pattern(long_analyze, r"落表前校验章号连续", "stage0-chapter-table-validation", "Stage 0 must validate chapter numbers before writing the boundary table"))
-    explorer = repo_root / "skills/story-setup/references/templates/agents/story-explorer.md"
+    # 对标召回流程在 story-explorer 的按需参考里（query_type=benchmark_style_load 才读）。
+    explorer = repo_root / "skills/story-setup/references/agent-references/benchmark-style-load.md"
     findings.extend(require_pattern(explorer, r"missing_primary_contract", "explorer-primary-failure", "story-explorer must fail closed on missing current benchmark artifacts"))
     findings.extend(require_pattern(explorer, r"repair_action", "explorer-repair-action", "story-explorer must return an explicit repair action"))
 
-    long_write = repo_root / "skills/story-long-write/SKILL.md"
+    # 主产物的读取与缺失即停在写前召回里定义（v0.8.2 起 SKILL.md 只留对标路径查找一行）。
+    long_write = repo_root / "skills/story-long-write/references/benchmark-recall.md"
     for artifact in manifest.primary_benchmark_artifacts:
         findings.extend(
             require_pattern(
@@ -1313,7 +1422,7 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             )
         )
 
-    explorer_template = repo_root / "skills/story-setup/references/templates/agents/story-explorer.md"
+    explorer_template = repo_root / "skills/story-setup/references/agent-references/benchmark-style-load.md"
     findings.extend(
         require_pattern(
             explorer_template,
@@ -1342,10 +1451,10 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
     )
     findings.extend(
         require_pattern(
-            repo_root / "skills/story-long-write/references/benchmark-recall.md",
+            repo_root / "skills/story-long-write/references/agent-calls.md",
             r"profile_missing[^\n]{0,60}custom_style[^\n]{0,40}继续",
             "daily-profile-missing-custom-style",
-            "benchmark-recall must keep the profile_missing + custom_style continuation branch",
+            "the story-explorer recall gaps (agent-calls.md) must keep the profile_missing + custom_style continuation branch",
         )
     )
 
@@ -1384,13 +1493,14 @@ def validate_repository(repo_root: Path, manifest: ContractManifest) -> List[Fin
             "long writing must bound public inspiration retrieval to Top 3-8 CBA cards without IA/NM",
         )
     )
-    setup_workflow = repo_root / "skills/story-long-write/references/workflow-setup.md"
-    for pattern, code, message in (
-        (r"适用阶段=设定", "inspiration-hook-setup", "book setup must offer optional inspiration recall"),
-        (r"适用阶段=卷纲", "inspiration-hook-volume", "volume outlining must offer optional inspiration recall"),
-        (r"适用阶段=细纲", "inspiration-hook-outline", "chapter outlining must offer optional inspiration recall"),
+    # 开书按时刻拆成三份文件（v0.8.2），三个灵感召回锚点各在自己的时刻文件里。
+    references_dir = repo_root / "skills/story-long-write/references"
+    for filename, pattern, code, message in (
+        ("workflow-setup.md", r"适用阶段=设定", "inspiration-hook-setup", "book setup must offer optional inspiration recall"),
+        ("workflow-volume.md", r"适用阶段=卷纲", "inspiration-hook-volume", "volume outlining must offer optional inspiration recall"),
+        ("workflow-outline.md", r"适用阶段=细纲", "inspiration-hook-outline", "chapter outlining must offer optional inspiration recall"),
     ):
-        findings.extend(require_pattern(setup_workflow, pattern, code, message))
+        findings.extend(require_pattern(references_dir / filename, pattern, code, message))
     findings.extend(
         require_pattern(
             repo_root / "skills/story-long-write/references/cross-book-recall.md",

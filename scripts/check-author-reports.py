@@ -30,14 +30,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # 作者记忆回执不在此列：整条回复就是模板两行，写成围栏块时模型会把围栏原样回给作者（实测 2/2），
 # 所以 author-memory.md 用行内示例描述回执。
 REQUIRED = {
-    "skills/story-import/SKILL.md": 1,
-    "skills/story-review/SKILL.md": 1,
+    # 导入的完成报告随汇报时刻移进 import-report.md（长篇、短篇各一块）。
+    "skills/story-import/references/import-report.md": 2,
+    # 审稿报告随时刻迁出入口（v0.8.2）：full/lean 模板随派子代理读 agent-prompts.md，一人审模板在 solo.md。
+    "skills/story-review/references/agent-prompts.md": 1,
+    "skills/story-review/references/solo.md": 1,
     "skills/story-deslop/SKILL.md": 1,
     "skills/story-short-analyze/SKILL.md": 1,
     "skills/story-long-scan/SKILL.md": 1,
     "skills/story-short-scan/SKILL.md": 1,
     "skills/story-cover/SKILL.md": 1,
-    "skills/story-long-write/references/workflow-setup.md": 1,
+    "skills/story-long-write/references/workflow-volume.md": 1,
+    "skills/story-long-write/references/workflow-outline.md": 1,
     "skills/story-long-write/references/workflow-chapter.md": 4,
     "skills/story-long-write/references/workflow-daily.md": 1,
     "skills/story-long-write/references/workflow-revision.md": 1,
